@@ -1,211 +1,96 @@
-#@
--- This wrapper allows the program to run headless on any OS (in theory)
--- It can be run using a standard lua interpreter, although LuaJIT is preferable
-
-
--- Callbacks
-local callbackTable = { }
-local mainObject
-function runCallback(name, ...)
-	if callbackTable[name] then
-		return callbackTable[name](...)
-	elseif mainObject and mainObject[name] then
-		return mainObject[name](mainObject, ...)
-	end
-end
-function SetCallback(name, func)
-	callbackTable[name] = func
-end
-function GetCallback(name)
-	return callbackTable[name]
-end
-function SetMainObject(obj)
-	mainObject = obj
-end
-
--- Image Handles
-local imageHandleClass = { }
-imageHandleClass.__index = imageHandleClass
-function NewImageHandle()
-	return setmetatable({ }, imageHandleClass)
-end
-function imageHandleClass:Load(fileName, ...)
-	self.valid = true
-end
-function imageHandleClass:Unload()
-	self.valid = false
-end
-function imageHandleClass:IsValid()
-	return self.valid
-end
-function imageHandleClass:SetLoadingPriority(pri) end
-function imageHandleClass:ImageSize()
-	return 1, 1
-end
-
--- Rendering
-function RenderInit() end
-function GetScreenSize()
-	return 1920, 1080
-end
-function SetClearColor(r, g, b, a) end
-function SetDrawLayer(layer, subLayer) end
-function SetViewport(x, y, width, height) end
-function SetDrawColor(r, g, b, a) end
-function DrawImage(imgHandle, left, top, width, height, tcLeft, tcTop, tcRight, tcBottom) end
-function DrawImageQuad(imageHandle, x1, y1, x2, y2, x3, y3, x4, y4, s1, t1, s2, t2, s3, t3, s4, t4) end
-function DrawString(left, top, align, height, font, text) end
-function DrawStringWidth(height, font, text)
-	return 1
-end
-function DrawStringCursorIndex(height, font, text, cursorX, cursorY)
-	return 0
-end
-function StripEscapes(text)
-	return text:gsub("%^%d",""):gsub("%^x%x%x%x%x%x%x","")
-end
-function GetAsyncCount()
-	return 0
-end
-
--- Search Handles
-function NewFileSearch() end
-
--- General Functions
-function SetWindowTitle(title) end
-function GetCursorPos()
-	return 0, 0
-end
-function SetCursorPos(x, y) end
-function ShowCursor(doShow) end
-function IsKeyDown(keyName) end
-function Copy(text) end
-function Paste() end
-function Deflate(data)
-	-- TODO: Might need this
-	return ""
-end
-function Inflate(data)
-	-- TODO: And this
-	return ""
-end
-function GetTime()
-	return 0
-end
-function GetScriptPath()
-	return ""
-end
-function GetRuntimePath()
-	return ""
-end
-function GetUserPath()
-	return ""
-end
-function MakeDir(path) end
-function RemoveDir(path) end
-function SetWorkDir(path) end
-function GetWorkDir()
-	return ""
-end
-function LaunchSubScript(scriptText, funcList, subList, ...) end
-function AbortSubScript(ssID) end
-function IsSubScriptRunning(ssID) end
-function LoadModule(fileName, ...)
-	if not fileName:match("%.lua") then
-		fileName = fileName .. ".lua"
-	end
-	local func, err = loadfile(fileName)
-	if func then
-		return func(...)
-	else
-		error("LoadModule() error loading '"..fileName.."': "..err)
-	end
-end
-function PLoadModule(fileName, ...)
-	if not fileName:match("%.lua") then
-		fileName = fileName .. ".lua"
-	end
-	local func, err = loadfile(fileName)
-	if func then
-		return PCall(func, ...)
-	else
-		error("PLoadModule() error loading '"..fileName.."': "..err)
-	end
-end
-function PCall(func, ...)
-	local ret = { pcall(func, ...) }
-	if ret[1] then
-		table.remove(ret, 1)
-		return nil, unpack(ret)
-	else
-		return ret[2]
-	end	
-end
-function ConPrintf(fmt, ...)
-	-- Optional
-	print(string.format(fmt, ...))
-end
-function ConPrintTable(tbl, noRecurse) end
-function ConExecute(cmd) end
-function ConClear() end
-function SpawnProcess(cmdName, args) end
-function OpenURL(url) end
-function SetProfiling(isEnabled) end
-function Restart() end
-function Exit() end
-
-local l_require = require
-function require(name)
-	-- Hack to stop it looking for lcurl, which we don't really need
-	if name == "lcurl.safe" then
-		return
-	end
-	return l_require(name)
-end
-
-
-dofile("Launch.lua")
-
--- Prevents loading of ModCache
--- Allows running mod parsing related tests without pushing ModCache
--- The CI env var will be true when run from github workflows but should be false for other tools using the headless wrapper 
-mainObject.continuousIntegrationMode = os.getenv("CI")
-
-runCallback("OnInit")
-runCallback("OnFrame") -- Need at least one frame for everything to initialise
-
-if mainObject.promptMsg then
-	-- Something went wrong during startup
-	print(mainObject.promptMsg)
-	io.read("*l")
-	return
-end
-
--- The build module; once a build is loaded, you can find all the good stuff in here
-build = mainObject.main.modes["BUILD"]
-
--- Here's some helpful helper functions to help you get started
-function newBuild()
-	mainObject.main:SetMode("BUILD", false, "Help, I'm stuck in Path of Building!")
-	runCallback("OnFrame")
-end
-function loadBuildFromXML(xmlText, name)
-	mainObject.main:SetMode("BUILD", false, name or "", xmlText)
-	runCallback("OnFrame")
-end
-function loadBuildFromJSON(getItemsJSON, getPassiveSkillsJSON)
-	mainObject.main:SetMode("BUILD", false, "")
-	runCallback("OnFrame")
-	local charData = build.importTab:ImportItemsAndSkills(getItemsJSON)
-	build.importTab:ImportPassiveTreeAndJewels(getPassiveSkillsJSON, charData)
-	-- You now have a build without a correct main skill selected, or any configuration options set
-	-- Good luck!
-end
-
-local buildXml = [[
 <?xml version="1.0" encoding="UTF-8"?>
 <PathOfBuilding>
 	<Build pantheonMajorGod="None" pantheonMinorGod="None" characterLevelAutoMode="true" className="Ranger" level="50" ascendClassName="None" viewMode="TREE" bandit="None" mainSocketGroup="1" targetVersion="3_0">
+		<PlayerStat value="1.6666666666667" stat="AverageDamage"/>
+		<PlayerStat value="1.6666666666667" stat="AverageBurstDamage"/>
+		<PlayerStat value="1.344" stat="Speed"/>
+		<PlayerStat value="0" stat="PreEffectiveCritChance"/>
+		<PlayerStat value="0" stat="CritChance"/>
+		<PlayerStat value="1.5" stat="CritMultiplier"/>
+		<PlayerStat value="100" stat="HitChance"/>
+		<PlayerStat value="2.24" stat="TotalDPS"/>
+		<PlayerStat value="0" stat="TotalDot"/>
+		<PlayerStat value="2.24" stat="WithBleedDPS"/>
+		<PlayerStat value="2.24" stat="WithIgniteDPS"/>
+		<PlayerStat value="2.24" stat="WithPoisonDPS"/>
+		<PlayerStat value="0" stat="TotalDotDPS"/>
+		<PlayerStat value="0" stat="CullingDPS"/>
+		<PlayerStat value="0" stat="ReservationDPS"/>
+		<PlayerStat value="2.24" stat="CombinedDPS"/>
+		<PlayerStat value="0" stat="ManaCost"/>
+		<PlayerStat value="0" stat="ManaPercentCost"/>
+		<PlayerStat value="0" stat="ManaPerSecondCost"/>
+		<PlayerStat value="0" stat="ManaPercentPerSecondCost"/>
+		<PlayerStat value="0" stat="LifeCost"/>
+		<PlayerStat value="0" stat="LifePercentCost"/>
+		<PlayerStat value="0" stat="LifePerSecondCost"/>
+		<PlayerStat value="0" stat="LifePercentPerSecondCost"/>
+		<PlayerStat value="0" stat="ESCost"/>
+		<PlayerStat value="0" stat="ESPerSecondCost"/>
+		<PlayerStat value="0" stat="ESPercentPerSecondCost"/>
+		<PlayerStat value="0" stat="RageCost"/>
+		<PlayerStat value="0" stat="SoulCost"/>
+		<PlayerStat value="24" stat="Str"/>
+		<PlayerStat value="337" stat="Dex"/>
+		<PlayerStat value="14" stat="Int"/>
+		<PlayerStat value="0" stat="Devotion"/>
+		<PlayerStat value="1207.1878130092" stat="TotalEHP"/>
+		<PlayerStat value="1077" stat="PhysicalMaximumHitTaken"/>
+		<PlayerStat value="792" stat="LightningMaximumHitTaken"/>
+		<PlayerStat value="792" stat="FireMaximumHitTaken"/>
+		<PlayerStat value="792" stat="ColdMaximumHitTaken"/>
+		<PlayerStat value="673" stat="ChaosMaximumHitTaken"/>
+		<PlayerStat value="922" stat="MainHandAccuracy"/>
+		<PlayerStat value="969" stat="Life"/>
+		<PlayerStat value="49" stat="Spec:LifeInc"/>
+		<PlayerStat value="969" stat="LifeUnreserved"/>
+		<PlayerStat value="969" stat="LifeRecoverable"/>
+		<PlayerStat value="100" stat="LifeUnreservedPercent"/>
+		<PlayerStat value="0" stat="LifeRegenRecovery"/>
+		<PlayerStat value="0" stat="LifeLeechGainRate"/>
+		<PlayerStat value="341" stat="Mana"/>
+		<PlayerStat value="0" stat="Spec:ManaInc"/>
+		<PlayerStat value="341" stat="ManaUnreserved"/>
+		<PlayerStat value="100" stat="ManaUnreservedPercent"/>
+		<PlayerStat value="6" stat="ManaRegenRecovery"/>
+		<PlayerStat value="0" stat="ManaLeechGainRate"/>
+		<PlayerStat value="0" stat="EnergyShield"/>
+		<PlayerStat value="0" stat="EnergyShieldRecoveryCap"/>
+		<PlayerStat value="0" stat="Spec:EnergyShieldInc"/>
+		<PlayerStat value="0" stat="EnergyShieldRegenRecovery"/>
+		<PlayerStat value="0" stat="EnergyShieldLeechGainRate"/>
+		<PlayerStat value="0" stat="Ward"/>
+		<PlayerStat value="0" stat="RageRegenRecovery"/>
+		<PlayerStat value="49" stat="Evasion"/>
+		<PlayerStat value="157" stat="Spec:EvasionInc"/>
+		<PlayerStat value="20" stat="MeleeEvadeChance"/>
+		<PlayerStat value="20" stat="ProjectileEvadeChance"/>
+		<PlayerStat value="0" stat="Armour"/>
+		<PlayerStat value="0" stat="Spec:ArmourInc"/>
+		<PlayerStat value="0" stat="PhysicalDamageReduction"/>
+		<PlayerStat value="0" stat="BlockChance"/>
+		<PlayerStat value="0" stat="SpellBlockChance"/>
+		<PlayerStat value="0" stat="AttackDodgeChance"/>
+		<PlayerStat value="4" stat="SpellDodgeChance"/>
+		<PlayerStat value="0" stat="EffectiveSpellSuppressionChance"/>
+		<PlayerStat value="-36" stat="FireResist"/>
+		<PlayerStat value="0" stat="FireResistOverCap"/>
+		<PlayerStat value="-36" stat="ColdResist"/>
+		<PlayerStat value="0" stat="ColdResistOverCap"/>
+		<PlayerStat value="-36" stat="LightningResist"/>
+		<PlayerStat value="0" stat="LightningResistOverCap"/>
+		<PlayerStat value="-60" stat="ChaosResist"/>
+		<PlayerStat value="0" stat="ChaosResistOverCap"/>
+		<PlayerStat value="1.18" stat="EffectiveMovementSpeedMod"/>
+		<PlayerStat value="0" stat="FullDPS"/>
+		<PlayerStat value="0" stat="FullDotDPS"/>
+		<PlayerStat value="0" stat="PowerCharges"/>
+		<PlayerStat value="3" stat="PowerChargesMax"/>
+		<PlayerStat value="0" stat="FrenzyCharges"/>
+		<PlayerStat value="3" stat="FrenzyChargesMax"/>
+		<PlayerStat value="0" stat="EnduranceCharges"/>
+		<PlayerStat value="3" stat="EnduranceChargesMax"/>
+		<TimelessData searchList="" searchListFallback="" devotionVariant2="1" devotionVariant1="1"/>
 	</Build>
 	<Tree activeSpec="1">
 		<Spec secondaryAscendClassId="nil" masteryEffects="" nodes="22266,50459,57819,63843,40743,11239,25067,65224,24133,53114,31315,9786,27283,58271,41536,34678,15842,26528,62712,31508,64235,37619,4573,30679,43608,41380,63439,12412,3309,39085,63921,32555,5408,41866,63139,15837,49900,51235,26471,61306,30894,1427,54142,45035,54307,42964,50338,37504,1461,465,46277,41250,59606,18670,36287,20807,18707,39718,5616,19069,23407" classId="2" treeVersion="3_24" ascendClassId="0">
@@ -363,12 +248,3 @@ local buildXml = [[
 		<Placeholder number="12" name="enemyArmour"/>
 	</Config>
 </PathOfBuilding>
-]]
-
-loadBuildFromXML(buildXml)
-local inspect = require('inspect')
-local calcs = LoadModule("Modules/Calcs")
-local calcsEnv = calcs.buildOutput(build, "CALCS")
-local calcsOutput = calcsEnv.player.output
-print(inspect(calcsOutput))
--- print(inspect(build))
